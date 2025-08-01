@@ -127,7 +127,7 @@ memory = ConversationBufferMemory(
     memory_key="chat_history",
     return_messages=True
 )
-
+'''
 question_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant."),
     MessagesPlaceholder(variable_name="chat_history"),
@@ -146,6 +146,20 @@ qa_prompt = ChatPromptTemplate.from_messages([
 ])
 
 document_chain = create_stuff_documents_chain(llm=llm, prompt=qa_prompt)
+
+qa_chain = create_retrieval_chain(
+    retriever=retriever,
+    combine_docs_chain=document_chain
+)
+'''
+retriever = vectorstore.as_retriever()
+
+combined_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant. Use both the chat history and the document context to answer the question."),
+    ("human", "Chat History:\n{chat_history}\n\nContext:\n{context}\n\nQuestion:\n{input}")
+])
+
+document_chain = create_stuff_documents_chain(llm=llm, prompt=combined_prompt)
 
 qa_chain = create_retrieval_chain(
     retriever=retriever,
@@ -187,6 +201,7 @@ def save_chat_to_postgres(user_message, bot_response):
     conn.close()
 
 # Step 7: Ask a question and save the result
+'''
 def get_bot_response(user_input):
     chat_history = memory.load_memory_variables({})["chat_history"]
     result = qa_chain.invoke({
@@ -197,4 +212,30 @@ def get_bot_response(user_input):
     memory.save_context({"input": user_input}, {"answer": answer})
     save_chat_to_postgres(user_input, answer)
     return answer
+'''
+
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
+
+def get_bot_response(user_input):
+    # Load memory
+    chat_history = memory.load_memory_variables({})["chat_history"]
+
+    # Run the chain
+    result = qa_chain.invoke({
+        "input": user_input,
+        "chat_history": chat_history
+    })
+
+    # Save new interaction to memory
+    answer = result["answer"]
+    memory.save_context({"input": user_input}, {"answer": answer})
+
+    # Save to database
+    save_chat_to_postgres(user_input, answer)
+
+    return answer
+
 
