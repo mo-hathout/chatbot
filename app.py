@@ -1,5 +1,5 @@
 import streamlit as st
-from backend import get_bot_response
+from test import get_bot_response
 
 st.set_page_config(page_title="PDF Chatbot", layout="centered")
 st.title("📄 Chat with Your PDF")
