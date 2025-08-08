@@ -14,6 +14,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyMuPDFLoader
 
 
+
+
+
 def hierarchical_chunking(text: str):
     sections = text.split("\n\n")  # Split by double newline for sections
     hierarchy = []
@@ -128,7 +131,7 @@ memory = ConversationBufferMemory(
 retriever = vectorstore.as_retriever()
 
 combined_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant. Use both the chat history and the document context to answer the question./no_think"),
+    ("system", "You are a helpful assistant. Use both the chat history and the document context to answer the question./no_think. do not answer any question outside the document context"),
     ("human", "Chat History:\n{chat_history}\n\nContext:\n{context}\n\nQuestion:\n{input}")
 ])
 
@@ -143,11 +146,19 @@ conn = psycopg2.connect(
         port="5432",
         database="Chat_History",
         user="postgres",
-        password="CorpCap@2025"
+        password="Mh@2003"
     )
-cursor = conn.cursor()
+
 # Step 6: Save chat to PostgreSQL
 def save_chat_to_postgres(user_message, bot_response):
+    conn = psycopg2.connect(
+        host="localhost",
+        port="5432",
+        database="Chat_History",
+        user="postgres",
+        password="Mh@2003"
+    )
+    cursor = conn.cursor()
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS chat_history (
@@ -192,7 +203,7 @@ def search_similar_chunks_pg(question_vector, top_k=5):
         port="5432",
         database="Chat_History",
         user="postgres",
-        password="CorpCap@2025"
+        password="Mh@2003"
     )
     cursor = conn.cursor()
 
@@ -225,6 +236,9 @@ def get_bot_response(user_input):
     # Retrieve similar chunks from PostgreSQL
     similar_chunks = search_similar_chunks_pg(question_vector)
 
+    if not similar_chunks:
+        return "Sorry, I can only answer questions related to the uploaded PDF document."
+
     # Format context from retrieved chunks
     context = "\n".join([chunk[0] for chunk in similar_chunks])  # chunk[0] is content
 
@@ -234,20 +248,20 @@ def get_bot_response(user_input):
     '''
     # Load memory
     chat_history = memory.load_memory_variables({})["chat_history"]
-    memory.clear()
+    
 
     # Run the chain
     result = qa_chain.invoke({
         "input": user_input,
-        "chat_history": chat_history
+        "chat_history": chat_history,
+        "context": context
+        
     })
     
     answer = result["answer"]
 
     # Save to memory and database
-    memory.save_context({"input": user_input}, {"answer": response.content})
+    memory.save_context({"input": user_input}, {"answer": answer})
     save_chat_to_postgres(user_input, answer)
 
     return (answer)
-
-
